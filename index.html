@@ -68,9 +68,29 @@
       <p class="screen-subtitle light">Fortune favors the bold. And the mildly unhinged.</p>
 
       <div class="dice-stage" aria-hidden="true">
-        <div class="die" id="dieOne"><span>⚄</span></div>
-        <div class="die second" id="dieTwo"><span>⚂</span></div>
+        <div class="dice-tray"></div>
+        <div class="die-toss toss-one">
+          <div class="die-cube" id="dieOne">
+            <div class="die-face face-1"><i class="pip p5"></i></div>
+            <div class="die-face face-2"><i class="pip p1"></i><i class="pip p9"></i></div>
+            <div class="die-face face-3"><i class="pip p1"></i><i class="pip p5"></i><i class="pip p9"></i></div>
+            <div class="die-face face-4"><i class="pip p1"></i><i class="pip p3"></i><i class="pip p7"></i><i class="pip p9"></i></div>
+            <div class="die-face face-5"><i class="pip p1"></i><i class="pip p3"></i><i class="pip p5"></i><i class="pip p7"></i><i class="pip p9"></i></div>
+            <div class="die-face face-6"><i class="pip p1"></i><i class="pip p3"></i><i class="pip p4"></i><i class="pip p6"></i><i class="pip p7"></i><i class="pip p9"></i></div>
+          </div>
+        </div>
+        <div class="die-toss toss-two">
+          <div class="die-cube" id="dieTwo">
+            <div class="die-face face-1"><i class="pip p5"></i></div>
+            <div class="die-face face-2"><i class="pip p1"></i><i class="pip p9"></i></div>
+            <div class="die-face face-3"><i class="pip p1"></i><i class="pip p5"></i><i class="pip p9"></i></div>
+            <div class="die-face face-4"><i class="pip p1"></i><i class="pip p3"></i><i class="pip p7"></i><i class="pip p9"></i></div>
+            <div class="die-face face-5"><i class="pip p1"></i><i class="pip p3"></i><i class="pip p5"></i><i class="pip p7"></i><i class="pip p9"></i></div>
+            <div class="die-face face-6"><i class="pip p1"></i><i class="pip p3"></i><i class="pip p4"></i><i class="pip p6"></i><i class="pip p7"></i><i class="pip p9"></i></div>
+          </div>
+        </div>
         <div class="portal"></div>
+        <div class="roll-callout" id="rollCallout">THE DICE HAVE NO IDEA WHAT THEY'RE DOING.</div>
       </div>
 
       <button class="pixel-btn blue mega" id="rollButton">⚄ ROLL FOR QUEST</button>
