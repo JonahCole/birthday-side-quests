@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#090b1a" />
   <meta name="description" content="Jonah's Unhinged Side Quest Challenge — a birthday game of good deeds, weird adventures, and mild chaos." />
   <!-- BUILD v10: dice results pause before reveal + Android-safe blob downloads -->
-<title>Jonah's Unhinged Side Quest Challenge</title>
+<title>Jonah's Unhinged Side Quest Challenge — v11</title>
   <style>
 :root {
   --ink:#10111c;
@@ -164,6 +164,26 @@ html,body{min-height:100%;height:auto}
   .button-row{margin-top:14px}
 }
 
+
+/* v11 Android scroll fix: the DOCUMENT owns scrolling, never an individual screen. */
+html{height:auto!important;min-height:100%;overflow-y:auto!important;overflow-x:hidden!important;}
+body{height:auto!important;min-height:100dvh!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;}
+.app-shell{height:auto!important;min-height:100dvh!important;overflow:visible!important;}
+.screen,.screen.active,.result-screen,.accepted-screen{
+  height:auto!important;
+  min-height:100dvh!important;
+  overflow:visible!important;
+  overscroll-behavior:auto!important;
+}
+.result-screen,.accepted-screen{justify-content:flex-start!important;}
+.accepted-screen{padding-bottom:calc(72px + env(safe-area-inset-bottom))!important;}
+/* Keep the accepted card fully visible without letting it consume the whole viewport. */
+.accepted-card-wrap{width:min(92%,420px)!important;max-width:420px!important;}
+.accepted-card-wrap img{max-height:56dvh!important;width:100%!important;height:auto!important;object-fit:contain!important;}
+/* Give the action area breathing room and make every action full-width/tappable. */
+.accepted-screen .mega{width:100%!important;max-width:420px!important;flex:0 0 auto!important;}
+.accepted-screen .legal-box{margin-bottom:24px!important;}
+
 </style>
 </head>
 <body>
@@ -293,7 +313,7 @@ html,body{min-height:100%;height:auto}
         <img id="acceptedCard" alt="Accepted side quest card" />
         <div class="download-stamp">✓ ACCEPTED</div>
       </div>
-      <p class="save-status" id="saveStatus">Your card is being saved without leaving this screen.</p>
+      <p class="save-status" id="saveStatus">Quest accepted. Save or share it whenever you want.</p>
       <button class="pixel-btn blue mega" id="saveButton">⬇ SAVE CARD</button>
       <button class="pixel-btn purple mega" id="shareButton">↗ SHARE QUEST</button>
       <button class="pixel-btn orange mega" id="acceptedRestartButton">↺ START OVER</button>
@@ -347,9 +367,12 @@ const saveStatus = $('#saveStatus');
 function showScreen(name){
   screens.forEach(s => s.classList.toggle('active', s.dataset.screen === name));
   topbar.hidden = name === 'intro';
-  const active=screens.find(s=>s.dataset.screen===name);
-  if(active) active.scrollTop=0;
-  window.scrollTo({top:0,behavior:'auto'});
+  // The page owns scrolling. Reset the document after the new screen has painted.
+  requestAnimationFrame(()=>{
+    document.documentElement.scrollTop=0;
+    document.body.scrollTop=0;
+    window.scrollTo(0,0);
+  });
 }
 function randomDie(sides){ return Math.floor(Math.random()*sides)+1; }
 function landingTransform(n, wobble=0){
@@ -513,13 +536,14 @@ async function downloadCard(q,quiet=false){
 }
 async function acceptQuest(){
   if(!state.current) return;
-  loadCardInto(acceptedCard,state.current);showScreen('accepted');confetti($('#acceptConfetti'),48);
+  loadCardInto(acceptedCard,state.current);
+  showScreen('accepted');
+  confetti($('#acceptConfetti'),48);
   beep(523,.08);setTimeout(()=>beep(659,.08),100);setTimeout(()=>beep(784,.13),200);
-  saveStatus.textContent='Quest accepted. Saving a copy without leaving this screen…';
-  // Let the accepted screen fully paint before triggering the browser download.
-  await new Promise(r=>setTimeout(r,550));
-  const ok=await downloadCard(state.current,true);
-  saveStatus.textContent=ok?'Card save started. You can keep scrolling — Share Quest and Start Over are below.':'Quest accepted. Auto-save was blocked; use Save Card below if you want a copy.';
+  saveStatus.textContent='Quest accepted. Save or share it whenever you want.';
+  // Deliberately do NOT auto-download here. On Android Chrome, initiating a
+  // download during the screen transition can interfere with scrolling.
+  // The explicit Save Card button below uses the same download function.
 }
 async function dataUrlToFile(q){
   const res=await fetch(q.image);const blob=await res.blob();
