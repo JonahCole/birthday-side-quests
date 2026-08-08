@@ -7,9 +7,7 @@ const quests = [
   [31,'hard','Blind Gig'],[32,'hard','Sporty Nonsense'],[33,'hard','Chaos Menu'],[34,'hard','Stupid Game Theory'],[35,'hard','Trivia Chaos'],[36,'hard','Boots or Belt It']
 ].map(([id,mode,title]) => ({
   id, mode, title,
-  // Resolve against the app directory so GitHub Pages project paths work reliably.
-  // v=3 also bypasses any stale 404 that an older service worker/browser cached.
-  image:new URL(`assets/cards/quest_${String(id).padStart(2,'0')}.png?v=3`, new URL('./', window.location.href)).href
+  image:`./assets/cards/quest_${String(id).padStart(2,'0')}.png?v=4`
 }));
 
 let state = { mode:null, current:null, lastId:null, sound:true, opened:false };
@@ -118,8 +116,21 @@ function rollQuest(){
     },430);
   },1180);
 }
+function setCardImage(img,q){
+  img.classList.remove('image-loaded','image-error');
+  img.alt=`Quest ${q.id}: ${q.title}`;
+  img.onload=()=>{img.classList.add('image-loaded'); img.onclick=null;};
+  img.onerror=()=>{
+    const resolved=new URL(q.image, window.location.href).href;
+    img.classList.add('image-error');
+    console.error('Quest card failed to load:',resolved);
+    showToast('Card image failed to load. Tap the card area to open it directly.');
+    img.onclick=()=>window.open(resolved,'_blank','noopener');
+  };
+  img.src=q.image;
+}
 function renderQuest(q){
-  questCard.src=q.image;questCard.alt=`Quest ${q.id}: ${q.title}`;
+  setCardImage(questCard,q);
   $('#questNumber').textContent=`QUEST ${String(q.id).padStart(2,'0')}`;$('#questTitle').textContent=q.title;
   $('#questModeLabel').textContent=q.mode==='hard'?'HARD MODE QUEST':'YOUR QUEST';
   cardFrame.classList.toggle('hard',q.mode==='hard');banner.classList.toggle('hard',q.mode==='hard');
@@ -139,7 +150,7 @@ async function downloadCard(q,quiet=false){
 }
 async function acceptQuest(){
   if(!state.current)return;
-  acceptedCard.src=state.current.image;acceptedCard.alt=`Accepted quest ${state.current.id}: ${state.current.title}`;
+  setCardImage(acceptedCard,state.current);
   showScreen('accepted');confetti($('#acceptConfetti'),45);beep(523,.08);setTimeout(()=>beep(659,.08),90);setTimeout(()=>beep(784,.12),180);
   saveStatus.textContent='Starting your card download…';
   const ok=await downloadCard(state.current,true);
@@ -177,15 +188,6 @@ $('#resultRestartButton').addEventListener('click',resetAll);
 $('#acceptedRestartButton').addEventListener('click',resetAll);
 $('#soundButton').addEventListener('click',()=>{state.sound=!state.sound;$('#soundButton').textContent=state.sound?'♪':'×';showToast(state.sound?'Tiny game noises: ON':'Tiny game noises: OFF');if(state.sound)beep(600,.05)});
 
-// Preload the deck after the intro becomes interactive.
-setTimeout(()=>quests.forEach(q=>{
-  const i=new Image();
-  i.src=q.image;
-  i.onerror=()=>console.warn('Quest card failed to load:', q.image);
-}),1200);
-
-if('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  navigator.serviceWorker.register('./sw.js', { updateViaCache:'none' })
-    .then(reg=>reg.update())
-    .catch(()=>{});
-}
+// v4 deliberately disables service workers/cache while the app is actively changing.
+if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{});
+if ('caches' in window) caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).catch(()=>{});

@@ -91,3 +91,7 @@ h2{font-size:clamp(31px,8vw,46px)}
 @media(max-width:390px){.screen{padding-left:14px;padding-right:14px}.mode-card .mode-badge{font-size:24px}.mode-card{grid-template-columns:1fr 60px}.mode-card .mode-art{font-size:43px}.button-row{gap:8px}.button-row .pixel-btn{font-size:11px}.accepted-card-wrap{width:88%}}
 @media(min-width:700px){body{padding:24px 0}.app-shell{min-height:calc(100svh - 48px);border:4px solid #262a48;border-radius:12px;overflow:hidden}.screen{min-height:calc(100svh - 56px)}.topbar{top:24px;border-radius:8px 8px 0 0}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+
+/* v4 card diagnostics */
+.card-frame img,.accepted-card-wrap img{min-height:180px;background:#111}
+.card-frame img.image-error,.accepted-card-wrap img.image-error{min-height:260px;object-fit:contain;border:2px dashed #ff5ea8;background:#17121f;cursor:pointer}
