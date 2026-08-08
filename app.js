@@ -7,7 +7,7 @@ const quests = [
   [31,'hard','Blind Gig'],[32,'hard','Sporty Nonsense'],[33,'hard','Chaos Menu'],[34,'hard','Stupid Game Theory'],[35,'hard','Trivia Chaos'],[36,'hard','Boots or Belt It']
 ].map(([id,mode,title]) => ({
   id, mode, title,
-  image:`./assets/cards/quest_${String(id).padStart(2,'0')}.png?v=4`
+  image:`./assets/cards/quest_${String(id).padStart(2,'0')}.png`
 }));
 
 let state = { mode:null, current:null, lastId:null, sound:true, opened:false };
@@ -116,19 +116,58 @@ function rollQuest(){
     },430);
   },1180);
 }
-function setCardImage(img,q){
+const imageObjectUrls = new WeakMap();
+
+function cardUrl(q, bust=false){
+  const url = new URL(q.image, document.baseURI);
+  if(bust) url.searchParams.set('fresh', `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  return url.href;
+}
+
+async function fetchCardBlob(q){
+  const url = cardUrl(q, true);
+  const res = await fetch(url, { cache:'no-store' });
+  if(!res.ok) throw new Error(`Card request failed: ${res.status} ${res.statusText}`);
+  const blob = await res.blob();
+  if(!blob.size) throw new Error('Card request returned an empty file');
+  return blob;
+}
+
+async function setCardImage(img,q){
   img.classList.remove('image-loaded','image-error');
   img.alt=`Quest ${q.id}: ${q.title}`;
-  img.onload=()=>{img.classList.add('image-loaded'); img.onclick=null;};
-  img.onerror=()=>{
-    const resolved=new URL(q.image, window.location.href).href;
+  img.onclick=null;
+
+  // Every render gets a token so an older async request cannot overwrite a newer roll.
+  const token = `${q.id}-${Date.now()}-${Math.random()}`;
+  img.dataset.loadToken = token;
+
+  const previous = imageObjectUrls.get(img);
+  if(previous){ URL.revokeObjectURL(previous); imageObjectUrls.delete(img); }
+
+  try{
+    const blob = await fetchCardBlob(q);
+    if(img.dataset.loadToken !== token) return;
+    const objectUrl = URL.createObjectURL(blob);
+    imageObjectUrls.set(img, objectUrl);
+    img.onload=()=>{ if(img.dataset.loadToken===token) img.classList.add('image-loaded'); };
+    img.onerror=()=>{
+      if(img.dataset.loadToken!==token) return;
+      img.classList.add('image-error');
+      showToast('The card downloaded but the browser refused to render it. Tap here to open the original.');
+      img.onclick=()=>window.open(cardUrl(q,true),'_blank','noopener');
+    };
+    img.src=objectUrl;
+  }catch(err){
+    if(img.dataset.loadToken !== token) return;
+    console.error('Quest card fetch failed:', err, cardUrl(q));
     img.classList.add('image-error');
-    console.error('Quest card failed to load:',resolved);
-    showToast('Card image failed to load. Tap the card area to open it directly.');
-    img.onclick=()=>window.open(resolved,'_blank','noopener');
-  };
-  img.src=q.image;
+    img.removeAttribute('src');
+    showToast(`Card fetch failed: ${err.message}. Tap the card area to open it directly.`);
+    img.onclick=()=>window.open(cardUrl(q,true),'_blank','noopener');
+  }
 }
+
 function renderQuest(q){
   setCardImage(questCard,q);
   $('#questNumber').textContent=`QUEST ${String(q.id).padStart(2,'0')}`;$('#questTitle').textContent=q.title;
@@ -138,12 +177,12 @@ function renderQuest(q){
 async function downloadCard(q,quiet=false){
   const filename=`jonah-side-quest-${String(q.id).padStart(2,'0')}-${q.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}.png`;
   try{
-    const res=await fetch(q.image);const blob=await res.blob();const url=URL.createObjectURL(blob);
+    const blob=await fetchCardBlob(q);const url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
     if(!quiet) showToast('Card download started.');
     return true;
   }catch(e){
-    const a=document.createElement('a');a.href=q.image;a.download=filename;a.target='_blank';document.body.appendChild(a);a.click();a.remove();
+    const a=document.createElement('a');a.href=cardUrl(q,true);a.download=filename;a.target='_blank';document.body.appendChild(a);a.click();a.remove();
     if(!quiet) showToast('Opened card image — save it from your browser.');
     return false;
   }
@@ -159,7 +198,7 @@ async function acceptQuest(){
 async function shareQuest(){
   if(!state.current)return;
   try{
-    const res=await fetch(state.current.image);const blob=await res.blob();
+    const blob=await fetchCardBlob(state.current);
     const file=new File([blob],`jonah-side-quest-${state.current.id}.png`,{type:'image/png'});
     if(navigator.canShare?.({files:[file]})){
       await navigator.share({title:`Jonah's Side Quest: ${state.current.title}`,text:`I rolled Quest ${state.current.id}: ${state.current.title}. Apparently this is my life now.`,files:[file]});
