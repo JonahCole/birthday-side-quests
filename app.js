@@ -17,9 +17,8 @@ const giftStage = $('#giftStage');
 const openGiftButton = $('#openGiftButton');
 const rollButton = $('#rollButton');
 const diceStage = $('.dice-stage');
-const dieOne = $('#dieOne');
-const dieTwo = $('#dieTwo');
-const rollCallout = $('#rollCallout');
+const dieOne = $('#dieOne span');
+const dieTwo = $('#dieTwo span');
 const questCard = $('#questCard');
 const acceptedCard = $('#acceptedCard');
 const cardFrame = $('#cardFrame');
@@ -33,15 +32,7 @@ function showScreen(name){
   window.scrollTo({top:0,behavior:'auto'});
 }
 function randomDie(){ return Math.floor(Math.random()*6)+1; }
-function landingTransform(n, wobble=0){
-  const rotations={
-    1:[-12,8], 2:[-10,-82], 3:[-102,8],
-    4:[78,8], 5:[-10,98], 6:[-10,188]
-  };
-  const [x,y]=rotations[n] || rotations[1];
-  return `rotateX(${x+wobble}deg) rotateY(${y-wobble}deg) rotateZ(${wobble/2}deg)`;
-}
-function landDie(el,n,wobble=0){ el.style.transform=landingTransform(n,wobble); }
+function dieChar(n){ return ['⚀','⚁','⚂','⚃','⚄','⚅'][n-1]; }
 function beep(freq=440,duration=.06,type='square'){
   if(!state.sound) return;
   try{
@@ -83,35 +74,14 @@ function chooseQuest(){
   return q;
 }
 function rollQuest(){
-  rollButton.disabled=true;
-  const d1=randomDie(), d2=randomDie();
-  rollCallout.textContent=state.mode==='hard'?'TEMPTING FATE. EXCELLENT CHOICE.':'SHAKING THE TINY CUBES OF DESTINY…';
-  diceStage.classList.remove('rolling');
-  void diceStage.offsetWidth;
-  diceStage.classList.add('rolling');
-  let ticks=0;
-  const interval=setInterval(()=>{
-    ticks++;
-    beep(150+Math.random()*260,.02);
-    if(ticks%3===0) rollCallout.textContent=['THE DICE ARE CONSIDERING IT…','CONSULTING THE CHAOS TABLE…','THIS SEEMS SCIENTIFIC…'][Math.floor(Math.random()*3)];
-  },90);
+  rollButton.disabled=true;diceStage.classList.add('rolling');
+  const interval=setInterval(()=>{dieOne.textContent=dieChar(randomDie());dieTwo.textContent=dieChar(randomDie());beep(180+Math.random()*210,.025);},95);
   setTimeout(()=>{
-    clearInterval(interval);
-    diceStage.classList.remove('rolling');
-    // Force the cubes to their actual rolled faces after the tumble.
-    void dieOne.offsetWidth;
-    landDie(dieOne,d1,-2);
-    landDie(dieTwo,d2,2);
-    rollCallout.textContent=`YOU ROLLED ${d1 + d2}. THIS NUMBER MEANS ABSOLUTELY NOTHING.`;
-    beep(120,.04);setTimeout(()=>beep(190,.05),70);
+    clearInterval(interval);diceStage.classList.remove('rolling');
+    dieOne.textContent=dieChar(randomDie());dieTwo.textContent=dieChar(randomDie());
     const q=chooseQuest();
-    setTimeout(()=>{
-      renderQuest(q);
-      beep(state.mode==='hard'?210:650,.12);
-      rollButton.disabled=false;
-      showScreen('result');
-    },430);
-  },1180);
+    renderQuest(q);beep(state.mode==='hard'?210:650,.12);rollButton.disabled=false;showScreen('result');
+  },850);
 }
 function renderQuest(q){
   questCard.src=q.image;questCard.alt=`Quest ${q.id}: ${q.title}`;
