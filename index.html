@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#090b1a" />
   <meta name="description" content="Jonah's Unhinged Side Quest Challenge — a birthday game of good deeds, weird adventures, and mild chaos." />
-  <!-- BUILD v9: meaningful dice mechanics — Easy d4+d6 paths, Hard d12 chaos die -->
+  <!-- BUILD v10: dice results pause before reveal + Android-safe blob downloads -->
 <title>Jonah's Unhinged Side Quest Challenge</title>
   <style>
 :root {
@@ -108,6 +108,7 @@ h2{font-size:clamp(31px,8vw,46px)}
 .roll-callout{position:absolute;z-index:8;left:50%;bottom:2px;transform:translateX(-50%);width:100%;font-size:10px;font-weight:900;letter-spacing:.8px;color:#aeb6e6;text-shadow:2px 2px 0 #000;min-height:26px}.dice-stage.rolling .roll-callout{color:#fff2a8;animation:calloutBlink .24s steps(2,end) infinite}@keyframes calloutBlink{50%{opacity:.35}}
 .path-legend{width:100%;max-width:430px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:2px auto 10px}.path-chip{padding:7px 3px;border:2px solid #42476d;background:#12152b;font-size:9px;font-weight:900;line-height:1.15;color:#e6e8ff;box-shadow:3px 3px 0 #000}.path-chip b{display:block;font-size:16px;margin-bottom:3px}.path-chip.kindness{border-color:#a83d47}.path-chip.connection{border-color:#2e78aa}.path-chip.self{border-color:#38834a}.path-chip.adventure{border-color:#9f7a28}.path-legend.hard-legend{display:block;border:2px solid #74315f;background:#1c1020;padding:9px 12px;color:#ffc1e6;font-size:10px;line-height:1.4}.path-legend[hidden]{display:none!important}
 .roll-resolution{width:100%;max-width:490px;margin:10px auto 0;border:2px solid #58608f;background:#12162c;padding:9px 12px;color:#e7eaff;font-size:11px;font-weight:900;letter-spacing:.4px;box-shadow:4px 4px 0 #000}.roll-resolution strong{color:#fff2a8}.roll-resolution.hard{border-color:#9b3a78;color:#ffd1ed}
+.roll-resolution[hidden]{display:none!important}.roll-resolution .resolution-main{display:block;font-size:15px;line-height:1.25;color:#fff;margin-bottom:5px}.roll-resolution .resolution-sub{display:block;font-size:10px;color:#aeb6e6;line-height:1.35}.roll-resolution.hard .resolution-main{color:#ffd0ed}.reveal-btn[hidden]{display:none!important}.reveal-btn{margin-top:10px}.roll-screen.roll-settled .dice-stage{margin-bottom:2px}.roll-screen.roll-settled .portal{filter:brightness(1.18)}
 .legal-box{border:2px solid #53556a;background:#171927;color:#d8daea;padding:12px 15px;margin-top:18px;max-width:440px;width:100%;font-size:12px;line-height:1.4;box-shadow:4px 4px 0 #000}
 
 /* Result */
@@ -260,6 +261,8 @@ html,body{min-height:100%;height:auto}
       </div>
       <div class="path-legend hard-legend" id="hardLegend" hidden>☠ THE CHAOS DIE HAS 12 ANSWERS. EACH NUMBER MAPS DIRECTLY TO ONE HARD QUEST.</div>
 
+      <div class="roll-resolution" id="rollResolution" role="status" aria-live="polite" hidden></div>
+      <button class="pixel-btn green mega reveal-btn" id="revealButton" hidden>✦ REVEAL MY QUEST</button>
       <button class="pixel-btn blue mega" id="rollButton">🎲 ROLL YOUR PATH</button>
       <button class="text-btn light" id="changeModeButton">← change mode</button>
       <div class="legal-box" id="rollLegal">The d4 picks your path. The d6 picks one of six quests on that path. Shockingly, there is now a system.</div>
@@ -285,12 +288,12 @@ html,body{min-height:100%;height:auto}
       <div class="confetti-layer" id="acceptConfetti" aria-hidden="true"></div>
       <p class="eyebrow">ACHIEVEMENT UNLOCKED</p>
       <h2 id="acceptedTitle">QUEST ACCEPTED!</h2>
-      <p class="screen-subtitle light">Your quest card is ready to keep, share, ignore for three weeks, and eventually remember.</p>
+      <p class="screen-subtitle light">Your quest is locked in. Save it, share it, ignore it for three weeks, and eventually remember.</p>
       <div class="accepted-card-wrap">
         <img id="acceptedCard" alt="Accepted side quest card" />
         <div class="download-stamp">✓ ACCEPTED</div>
       </div>
-      <p class="save-status" id="saveStatus">Attempting to save your card…</p>
+      <p class="save-status" id="saveStatus">Your card is being saved without leaving this screen.</p>
       <button class="pixel-btn blue mega" id="saveButton">⬇ SAVE CARD</button>
       <button class="pixel-btn purple mega" id="shareButton">↗ SHARE QUEST</button>
       <button class="pixel-btn orange mega" id="acceptedRestartButton">↺ START OVER</button>
@@ -319,6 +322,9 @@ const gift = $('#gift');
 const giftStage = $('#giftStage');
 const openGiftButton = $('#openGiftButton');
 const rollButton = $('#rollButton');
+const revealButton = $('#revealButton');
+const rollResolution = $('#rollResolution');
+const rollScreen = $('[data-screen="roll"]');
 const diceStage = $('.dice-stage');
 const d4 = $('#d4');
 const d4Symbol = $('#d4Symbol');
@@ -341,6 +347,8 @@ const saveStatus = $('#saveStatus');
 function showScreen(name){
   screens.forEach(s => s.classList.toggle('active', s.dataset.screen === name));
   topbar.hidden = name === 'intro';
+  const active=screens.find(s=>s.dataset.screen===name);
+  if(active) active.scrollTop=0;
   window.scrollTo({top:0,behavior:'auto'});
 }
 function randomDie(sides){ return Math.floor(Math.random()*sides)+1; }
@@ -389,10 +397,34 @@ function confetti(target,count=28){
   }
   setTimeout(()=>target.innerHTML='',3000);
 }
+function resetRollResult(){
+  rollResolution.hidden=true;
+  revealButton.hidden=true;
+  rollScreen.classList.remove('roll-settled');
+  rollButton.hidden=false;
+  rollButton.disabled=false;
+  rollButton.textContent=state.mode==='hard'?'☠ ROLL THE CHAOS DIE':'🎲 ROLL YOUR PATH';
+}
+function showRollResult(final){
+  const hard=state.mode==='hard';
+  rollScreen.classList.add('roll-settled');
+  rollResolution.classList.toggle('hard',hard);
+  if(hard){
+    rollResolution.innerHTML=`<span class="resolution-main">☠ CHAOS DIE: <strong>${final.hardRoll}</strong></span><span class="resolution-sub">That number maps directly to one Hard Mode quest. The die has ruled. You may now inspect the consequences.</span>`;
+  }else{
+    rollResolution.innerHTML=`<span class="resolution-main">${final.path.symbol} <strong>${final.path.name}</strong> + D6 <strong>${final.questRoll}</strong></span><span class="resolution-sub">Your path and quest number are locked in. The card stays hidden until you choose to reveal it.</span>`;
+  }
+  rollResolution.hidden=false;
+  revealButton.hidden=false;
+  rollButton.hidden=false;
+  rollButton.disabled=false;
+  rollButton.textContent='🎲 REROLL BEFORE REVEAL';
+  try{revealButton.focus({preventScroll:true});}catch(e){}
+}
 function resetAll(){ state.mode=null;state.current=null;state.roll=null;state.rerolls=0;showScreen('mode'); }
 function selectMode(mode){
   state.mode=mode;state.roll=null;state.rerolls=0;
-  const rollScreen=$('[data-screen="roll"]');
+  resetRollResult();
   const hard=mode==='hard';
   rollScreen.classList.toggle('hard-roll',hard);
   $('#modeEyebrow').textContent=hard?'☠ HARD MODE':'♥ EASY MODE';
@@ -405,7 +437,8 @@ function selectMode(mode){
   beep(hard?180:520,.09);showScreen('roll');
 }
 function rollQuest(){
-  rollButton.disabled=true;
+  rollResolution.hidden=true;revealButton.hidden=true;rollScreen.classList.remove('roll-settled');
+  rollButton.hidden=false;rollButton.disabled=true;
   diceStage.classList.remove('rolling');void diceStage.offsetWidth;diceStage.classList.add('rolling');
   const hard=state.mode==='hard';
   let final, ticks=0;
@@ -421,7 +454,7 @@ function rollQuest(){
       rollCallout.textContent=`☠ ${n} — THE CHAOS DIE HAS SPOKEN.`;
       state.roll=final;state.current=final.q;
       beep(130,.05);setTimeout(()=>beep(205,.07),80);
-      setTimeout(()=>{renderQuest(final.q);rollButton.disabled=false;showScreen('result');},650);
+      setTimeout(()=>{showRollResult(final);},420);
     },1350);
   }else{
     const pathRoll=randomDie(4), questRoll=randomDie(6); final=easyQuestFromRoll(pathRoll,questRoll);
@@ -435,7 +468,7 @@ function rollQuest(){
       rollCallout.textContent=`${final.path.symbol} ${final.path.name} + ${questRoll} — QUEST IDENTIFIED.`;
       state.roll=final;state.current=final.q;
       beep(160,.04);setTimeout(()=>beep(260,.05),70);setTimeout(()=>beep(620,.09),150);
-      setTimeout(()=>{renderQuest(final.q);rollButton.disabled=false;showScreen('result');},650);
+      setTimeout(()=>{showRollResult(final);},420);
     },1180);
   }
 }
@@ -462,17 +495,31 @@ function renderQuest(q){
   }
   cardFrame.classList.toggle('hard',q.mode==='hard');banner.classList.toggle('hard',q.mode==='hard');
 }
-function downloadCard(q,quiet=false){
+async function downloadCard(q,quiet=false){
   const filename=`jonah-side-quest-${String(q.id).padStart(2,'0')}-${q.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}.webp`;
-  const a=document.createElement('a');a.href=q.image;a.download=filename;document.body.appendChild(a);a.click();a.remove();
-  if(!quiet) showToast('Card download started.');return true;
+  try{
+    const res=await fetch(q.image);
+    const blob=await res.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=filename;a.style.display='none';document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    if(!quiet) showToast('Card download started.');
+    return true;
+  }catch(e){
+    if(!quiet) showToast('Could not start the download. Try Share Quest instead.');
+    return false;
+  }
 }
-function acceptQuest(){
+async function acceptQuest(){
   if(!state.current) return;
   loadCardInto(acceptedCard,state.current);showScreen('accepted');confetti($('#acceptConfetti'),48);
   beep(523,.08);setTimeout(()=>beep(659,.08),100);setTimeout(()=>beep(784,.13),200);
-  saveStatus.textContent='Quest accepted. Saving your card…';
-  setTimeout(()=>{downloadCard(state.current,true);saveStatus.textContent='Card save started. If your browser asks where to save it, that is between you and your phone now.';},350);
+  saveStatus.textContent='Quest accepted. Saving a copy without leaving this screen…';
+  // Let the accepted screen fully paint before triggering the browser download.
+  await new Promise(r=>setTimeout(r,550));
+  const ok=await downloadCard(state.current,true);
+  saveStatus.textContent=ok?'Card save started. You can keep scrolling — Share Quest and Start Over are below.':'Quest accepted. Auto-save was blocked; use Save Card below if you want a copy.';
 }
 async function dataUrlToFile(q){
   const res=await fetch(q.image);const blob=await res.blob();
@@ -496,7 +543,8 @@ openGiftButton.addEventListener('click',()=>{
 });
 $$('.mode-card').forEach(b=>b.addEventListener('click',()=>selectMode(b.dataset.mode)));
 rollButton.addEventListener('click',rollQuest);
-$('#rerollButton').addEventListener('click',()=>{state.rerolls++;showToast(['Destiny has been formally appealed.','Fine. Best two out of three-ish.','The dice will remember this.','That sounded like work. New fate requested.'][(state.rerolls-1)%4]);showScreen('roll');setTimeout(rollQuest,220)});
+revealButton.addEventListener('click',()=>{if(!state.current)return;renderQuest(state.current);showScreen('result');});
+$('#rerollButton').addEventListener('click',()=>{state.rerolls++;showToast(['Destiny has been formally appealed.','Fine. Best two out of three-ish.','The dice will remember this.','That sounded like work. New fate requested.'][(state.rerolls-1)%4]);resetRollResult();showScreen('roll');setTimeout(rollQuest,220)});
 $('#acceptButton').addEventListener('click',acceptQuest);
 $('#saveButton').addEventListener('click',()=>state.current&&downloadCard(state.current));
 $('#shareButton').addEventListener('click',shareQuest);
