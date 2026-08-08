@@ -1,5 +1,51 @@
-const CACHE='jonah-side-quests-v1';
+const CACHE='jonah-side-quests-v3';
 const CORE=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./assets/icon-192.png','./assets/icon-512.png'];
-self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE))));
-self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
-self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(hit=>hit||fetch(e.request).then(res=>{if(e.request.method==='GET'&&new URL(e.request.url).origin===location.origin){const clone=res.clone();caches.open(CACHE).then(c=>c.put(e.request,clone));}return res;}))));
+
+self.addEventListener('install',event=>{
+  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));
+});
+
+self.addEventListener('activate',event=>{
+  event.waitUntil(
+    caches.keys()
+      .then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key))))
+      .then(()=>self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch',event=>{
+  const request=event.request;
+  if(request.method!=='GET') return;
+
+  const url=new URL(request.url);
+  const sameOrigin=url.origin===self.location.origin;
+  const isQuestCard=sameOrigin && url.pathname.includes('/assets/cards/');
+
+  // Quest cards are NETWORK FIRST. The old worker accidentally cached 404s,
+  // so newly-uploaded cards could remain "missing" forever on a device.
+  if(isQuestCard){
+    event.respondWith(
+      fetch(request)
+        .then(response=>{
+          if(response.ok){
+            const copy=response.clone();
+            caches.open(CACHE).then(cache=>cache.put(request,copy));
+          }
+          return response;
+        })
+        .catch(()=>caches.match(request))
+    );
+    return;
+  }
+
+  // App shell can remain cache-first, but NEVER cache an unsuccessful response.
+  event.respondWith(
+    caches.match(request).then(cached=>cached || fetch(request).then(response=>{
+      if(sameOrigin && response.ok){
+        const copy=response.clone();
+        caches.open(CACHE).then(cache=>cache.put(request,copy));
+      }
+      return response;
+    }))
+  );
+});
