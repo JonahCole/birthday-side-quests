@@ -128,9 +128,19 @@ async function fetchCardBlob(q){
   const url = cardUrl(q, true);
   const res = await fetch(url, { cache:'no-store' });
   if(!res.ok) throw new Error(`Card request failed: ${res.status} ${res.statusText}`);
-  const blob = await res.blob();
-  if(!blob.size) throw new Error('Card request returned an empty file');
-  return blob;
+
+  // GitHub Pages can serve generated image files with a generic MIME type.
+  // Navigating directly to the PNG still works because the browser sniffs it,
+  // but an <img> backed by a Blob URL may reject application/octet-stream.
+  // Read the bytes and explicitly label them as PNG before rendering/sharing.
+  const bytes = await res.arrayBuffer();
+  if(!bytes.byteLength) throw new Error('Card request returned an empty file');
+  const signature = new Uint8Array(bytes.slice(0, 8));
+  const isPng = signature.length === 8 &&
+    signature[0] === 0x89 && signature[1] === 0x50 && signature[2] === 0x4E && signature[3] === 0x47 &&
+    signature[4] === 0x0D && signature[5] === 0x0A && signature[6] === 0x1A && signature[7] === 0x0A;
+  if(!isPng) throw new Error(`Card response was not a PNG (server type: ${res.headers.get('content-type') || 'unknown'})`);
+  return new Blob([bytes], { type:'image/png' });
 }
 
 async function setCardImage(img,q){
@@ -141,23 +151,33 @@ async function setCardImage(img,q){
   // Every render gets a token so an older async request cannot overwrite a newer roll.
   const token = `${q.id}-${Date.now()}-${Math.random()}`;
   img.dataset.loadToken = token;
-
-  const previous = imageObjectUrls.get(img);
-  if(previous){ URL.revokeObjectURL(previous); imageObjectUrls.delete(img); }
+  img.removeAttribute('src');
 
   try{
     const blob = await fetchCardBlob(q);
     if(img.dataset.loadToken !== token) return;
-    const objectUrl = URL.createObjectURL(blob);
-    imageObjectUrls.set(img, objectUrl);
-    img.onload=()=>{ if(img.dataset.loadToken===token) img.classList.add('image-loaded'); };
+
+    // Convert the known-good PNG Blob to an explicit data:image/png URL.
+    // This avoids depending on GitHub's response MIME type or Blob URL handling.
+    const dataUrl = await new Promise((resolve,reject)=>{
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error('Could not convert card image'));
+      reader.readAsDataURL(blob);
+    });
+    if(img.dataset.loadToken !== token) return;
+
+    img.onload=()=>{
+      if(img.dataset.loadToken!==token) return;
+      img.classList.add('image-loaded');
+    };
     img.onerror=()=>{
       if(img.dataset.loadToken!==token) return;
       img.classList.add('image-error');
-      showToast('The card downloaded but the browser refused to render it. Tap here to open the original.');
+      showToast('PNG bytes loaded, but the browser still refused the image. Tap here to open the original.');
       img.onclick=()=>window.open(cardUrl(q,true),'_blank','noopener');
     };
-    img.src=objectUrl;
+    img.src=dataUrl;
   }catch(err){
     if(img.dataset.loadToken !== token) return;
     console.error('Quest card fetch failed:', err, cardUrl(q));
